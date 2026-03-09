@@ -1,0 +1,266 @@
+using System.Collections.Concurrent;
+using CSharpFunctionalExtensions;
+using Hangfire;
+using HOPEless.Bancho;
+using HOPEless.Bancho.Objects;
+using HOPEless.osu;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Serilog;
+using Sunrise.Shared.Application;
+using Sunrise.Shared.Database;
+using Sunrise.Shared.Database.Models.Users;
+using Sunrise.Shared.Database.Objects;
+using Sunrise.Shared.Enums.Users;
+using Sunrise.Shared.Objects.Serializable;
+using Sunrise.Shared.Objects.Sessions;
+
+namespace Sunrise.Shared.Repositories;
+
+public class SessionRepository
+{
+    private readonly ChatChannelRepository _channels;
+    private readonly ConcurrentDictionary<string, Session> _sessions = new();
+
+    public SessionRepository(ChatChannelRepository channels)
+    {
+        _channels = channels;
+
+        RecurringJob.AddOrUpdate("ClearInactiveSessions", () => ClearInactiveSessions(), "*/1 * * * *");
+    }
+
+    public void WriteToAllSessions(PacketType type, object data, int ignoreUserId = -1)
+    {
+        foreach (var session in _sessions.Values)
+        {
+            if (session.UserId == ignoreUserId)
+                continue;
+
+            session.WritePacket(type, data);
+        }
+    }
+
+    public Session CreateSession(User user, Location location, LoginRequest loginRequest)
+    {
+        var session = new Session(user, location, loginRequest)
+        {
+            Attributes =
+            {
+                IgnoreNonFriendPm = loginRequest.BlockNonFriendPm,
+                ShowUserLocation = loginRequest.ShowCityLocation
+            }
+        };
+
+        _sessions.TryAdd(session.Token, session);
+        return session;
+    }
+
+    /*
+     * Soft remove current session from chats, multiplayer and spectating.
+     * While not removing it, so on request we could find current session and send LoginReply
+     */
+    public async Task SoftRemoveSession(Session session)
+    {
+        session.Match?.RemovePlayer(session);
+
+        session.Spectating?.RemoveSpectator(session);
+        session.Spectating = null;
+
+        foreach (var channel in _channels.GetChannels())
+        {
+            channel.RemoveUser(session.UserId);
+        }
+
+        session.WritePacket(PacketType.ServerLoginReply, (int)LoginResponse.InvalidCredentials);
+
+        using var scope = ServicesProviderHolder.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<DatabaseService>();
+
+        var user = await database.Users.GetUser(id: session.UserId);
+        if (user == null)
+            return;
+
+        user.LastOnlineTime = DateTime.UtcNow;
+        await database.Users.UpdateUser(user);
+    }
+
+    public async Task RemoveSession(Session session)
+    {
+        await SoftRemoveSession(session);
+
+        _sessions.TryRemove(session.Token, out _);
+    }
+
+    public async Task<Session?> TryGetSessionAsync(string username, string? passhash)
+    {
+        using var scope = ServicesProviderHolder.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<DatabaseService>();
+
+        var searchedUser = await database.Users.GetUser(
+            username: username,
+            passhash: passhash,
+            options: new QueryOptions(true));
+
+        if (searchedUser == null)
+            return null;
+
+        return _sessions.Values.FirstOrDefault(x => x.UserId == searchedUser.Id);
+    }
+
+    [Obsolete("Use TryGetSessionAsync instead")]
+    public bool TryGetSession(string username, string? passhash, out Session? session)
+    {
+        var result = TryGetSessionAsync(username, passhash)
+            .ConfigureAwait(false).GetAwaiter().GetResult();
+
+        session = result;
+        return session != null;
+    }
+
+    public bool TryGetSession(out Session? session, string? token = null, long? userId = null)
+    {
+        session = _sessions.Values.FirstOrDefault(x => x.Token == token || x.UserId == userId);
+        return session != null;
+    }
+
+    public Session? GetSession(string? username = null, string? token = null, long? userId = null)
+    {
+        Session? session = null;
+
+        if (username != null)
+            TryGetSession(username, null, out session);
+
+        if (token != null || userId != null)
+            TryGetSession(out session, token, userId);
+
+        return session;
+    }
+
+    public bool IsUserOnline(int userId)
+    {
+        return _sessions.Values.Any(x => x.UserId == userId);
+    }
+
+    public async Task<Result> SendCurrentPlayers(Session session)
+    {
+        try
+        {
+            var players = _sessions.Values.Where(x => x.UserId != session.UserId).ToList();
+
+            using var scope = ServicesProviderHolder.CreateScope();
+            var database = scope.ServiceProvider.GetRequiredService<DatabaseService>();
+
+            var currentUsers = await database.Users.GetUsers(players.Select(x => x.UserId).ToList(),
+                new QueryOptions(false)
+                {
+                    QueryModifier = q => q.Cast<User>().Include(u => u.UserStats)
+                });
+
+            var userSessionsByGamemode = _sessions.Values
+                .GroupBy(s => s.Attributes.GetCurrentGameMode())
+                .ToDictionary(
+                    g => g.Key,
+                    g =>
+                    {
+                        var userIds = g.Select(s => s.UserId).ToHashSet();
+                        return currentUsers.Where(u => userIds.Contains(u.Id)).ToList();
+                    });
+
+            var results = await Task.WhenAll(
+                userSessionsByGamemode.Select(async x =>
+                    (x.Key, await database.Users.Ranks.GetUsersGlobalRanks(x.Value, x.Key))));
+
+            foreach (var player in players)
+            {
+                var playerUser = currentUsers.FirstOrDefault(x => x.Id == player.UserId);
+                if (playerUser == null)
+                    Log.Warning("Could not find user with id {UserId} which has an active session.", player.UserId);
+
+                try
+                {
+                    session.WritePacket(PacketType.ServerUserPresence, await player.Attributes.GetPlayerPresence(playerUser, results));
+                    session.WritePacket(PacketType.ServerUserData, await player.Attributes.GetPlayerData(playerUser, results));
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex,
+                        "An error occurred while sending player data for user {PlayerUserId} to session {SessionUserId}.",
+                        player.UserId,
+                        session.UserId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "An error occurred while sending current players to session {SessionUserId}.", session.UserId);
+            return Result.Failure("An error occurred while sending current players.");
+        }
+
+        return Result.Success();
+    }
+
+    public List<Session> GetSessions()
+    {
+        return _sessions.Values.ToList();
+    }
+
+    public int GetSessionCount()
+    {
+        return _sessions.Count;
+    }
+
+    public int GetTotalSpectatorsCount()
+    {
+        return _sessions.Values.Sum(s => s.Spectators.Count);
+    }
+
+    public async Task AddBotToSession()
+    {
+        using var scope = ServicesProviderHolder.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<DatabaseService>();
+
+        var bot = await database.Users.GetServerBot();
+
+        if (bot == null)
+            throw new Exception("Bot not found in the database while initializing bot in the session repository.");
+
+        var loginRequest = new LoginRequest(
+            bot.Username,
+            "Hash",
+            "Version",
+            0,
+            false,
+            "Hash",
+            false
+        );
+
+        var session = new Session(bot, new Location(), loginRequest)
+        {
+            Attributes =
+            {
+                IsBot = true,
+                ShowUserLocation = false,
+                UsesOsuClient = false,
+
+                Status = new BanchoUserStatus
+                {
+                    Action = BanchoAction.Unknown
+                }
+            }
+        };
+
+        _sessions.TryAdd(session.Token, session);
+    }
+
+    public async Task ClearInactiveSessions()
+    {
+        foreach (var session in _sessions.Values)
+        {
+            if (session.Attributes.LastPingRequest >= DateTime.UtcNow.AddMinutes(-1) || session.Attributes.IsBot)
+                continue;
+
+            WriteToAllSessions(PacketType.ServerUserQuit, session.UserId);
+            await RemoveSession(session);
+        }
+    }
+}

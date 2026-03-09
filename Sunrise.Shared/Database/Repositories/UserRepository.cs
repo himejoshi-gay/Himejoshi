@@ -1,0 +1,322 @@
+using CSharpFunctionalExtensions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Sunrise.Shared.Application;
+using Sunrise.Shared.Database.Extensions;
+using Sunrise.Shared.Database.Models.Users;
+using Sunrise.Shared.Database.Objects;
+using Sunrise.Shared.Database.Services.Users;
+using Sunrise.Shared.Enums;
+using Sunrise.Shared.Enums.Users;
+using Sunrise.Shared.Objects;
+using Sunrise.Shared.Utils;
+using GameMode = Sunrise.Shared.Enums.Beatmaps.GameMode;
+
+namespace Sunrise.Shared.Database.Repositories;
+
+public class UserRepository(
+    ILogger<UserRepository> logger,
+    Lazy<DatabaseService> databaseService,
+    SunriseDbContext dbContext,
+    UserStatsService userStatsService,
+    UserRelationshipService userRelationshipService,
+    UserModerationService userModerationService,
+    UserMetadataService userMetadataService,
+    UserMedalsService userMedalsService,
+    UserFavouritesService userFavouritesService,
+    UserFileService userFileService,
+    UserGradesService userGradesService,
+    UserInventoryItemService userInventoryItemService,
+    UserStatsRanksService userStatsRanksService)
+{
+    private readonly ILogger _logger = logger;
+
+    public UserRelationshipService Relationship { get; } = userRelationshipService;
+    public UserStatsService Stats { get; } = userStatsService;
+    public UserFavouritesService Favourites { get; } = userFavouritesService;
+    public UserMedalsService Medals { get; } = userMedalsService;
+    public UserModerationService Moderation { get; } = userModerationService;
+    public UserFileService Files { get; } = userFileService;
+    public UserGradesService Grades { get; } = userGradesService;
+    public UserMetadataService Metadata { get; } = userMetadataService;
+    public UserInventoryItemService Inventory { get; } = userInventoryItemService;
+    public UserStatsRanksService Ranks { get; } = userStatsRanksService;
+
+    public async Task<Result> AddUser(User user)
+    {
+        return await databaseService.Value.CommitAsTransactionAsync(async () =>
+        {
+            dbContext.Users.Add(user);
+            await dbContext.SaveChangesAsync();
+
+            var modes = Enum.GetValues<GameMode>();
+
+            foreach (var mode in modes)
+            {
+                var stats = new UserStats
+                {
+                    UserId = user.Id,
+                    GameMode = mode
+                };
+
+                var addUserStatsResult = await Stats.AddUserStats(stats, user);
+                if (addUserStatsResult.IsFailure)
+                    throw new Exception(addUserStatsResult.Error);
+            }
+
+            var addStartItemsToUserInventoryResult = await AddStarterItemsToUserInventory(user);
+            if (addStartItemsToUserInventoryResult.IsFailure)
+                throw new Exception(addStartItemsToUserInventoryResult.Error);
+
+            await dbContext.SaveChangesAsync();
+        });
+    }
+
+    private async Task<Result> AddStarterItemsToUserInventory(User user)
+    {
+        var addUserHypesResult = await Inventory.SetInventoryItem(user, ItemType.Hype, Configuration.UserHypesWeekly);
+        if (addUserHypesResult.IsFailure)
+            return Result.Failure(addUserHypesResult.Error);
+
+        return Result.Success();
+    }
+    
+    public async Task<User?> GetServerBot()
+    {
+        var user = await dbContext.Users
+            .Where(u => u.Privilege.HasFlag(UserPrivilege.ServerBot))
+            .IncludeUserThumbnails()
+            .FirstOrDefaultAsync();
+
+        return user;
+    }
+
+    public async Task<User?> GetUser(
+        long? id = null,
+        string? username = null,
+        string? email = null,
+        string? passhash = null,
+        QueryOptions? options = null,
+        CancellationToken ct = default
+    )
+    {
+        if (passhash != null && id == null && username == null && email == null)
+            throw new ArgumentException("Passhash provided without any other parameters");
+
+        var userQuery = dbContext.Users.AsQueryable();
+
+        if (id != null) userQuery = userQuery.Where(u => u.Id == id);
+        if (username != null) userQuery = userQuery.Where(u => u.Username == username);
+        if (email != null) userQuery = userQuery.Where(u => u.Email == email);
+        if (passhash != null) userQuery = userQuery.Where(u => u.Passhash == passhash);
+
+        var user = await userQuery
+            .IncludeUserThumbnails()
+            .UseQueryOptions(options)
+            .FirstOrDefaultAsync(cancellationToken: ct);
+
+        return user;
+    }
+
+
+    public async Task<User?> GetValidUser(
+        int? id = null,
+        string? username = null,
+        string? email = null,
+        string? passhash = null,
+        QueryOptions? options = null,
+        CancellationToken ct = default
+    )
+    {
+        if (passhash != null && id == null && username == null && email == null)
+            throw new ArgumentException("Passhash provided without any other parameters");
+
+        var userQuery = dbContext.Users.AsQueryable();
+
+        if (id != null) userQuery = userQuery.Where(u => u.Id == id);
+        if (username != null) userQuery = userQuery.Where(u => u.Username == username);
+        if (email != null) userQuery = userQuery.Where(u => u.Email == email);
+        if (passhash != null) userQuery = userQuery.Where(u => u.Passhash == passhash);
+
+        var user = await userQuery
+            .FilterValidUsers()
+            .IncludeUserThumbnails()
+            .UseQueryOptions(options)
+            .FirstOrDefaultAsync(cancellationToken: ct);
+
+        return user;
+    }
+
+    public async Task<List<User>> GetUsers(List<int>? ids = null, QueryOptions? options = null, CancellationToken ct = default)
+    {
+        var userQuery = dbContext.Users.AsQueryable();
+
+        if (ids != null) userQuery = userQuery.Where(u => ids.Contains(u.Id));
+
+        var user = await userQuery
+            .IncludeUserThumbnails()
+            .UseQueryOptions(options)
+            .ToListAsync(cancellationToken: ct);
+
+        return user;
+    }
+
+    public async Task<List<User>> GetValidUsers(List<int>? ids = null, QueryOptions? options = null, CancellationToken ct = default)
+    {
+        var baseQuery = dbContext.Users.AsQueryable();
+
+        if (ids != null) baseQuery = baseQuery.Where(u => ids.Contains(u.Id));
+
+        var user = await baseQuery
+            .FilterValidUsers()
+            .IncludeUserThumbnails()
+            .UseQueryOptions(options)
+            .ToListAsync(cancellationToken: ct);
+
+        return user;
+    }
+
+    public async Task<int> CountUsers(CancellationToken ct = default)
+    {
+        return await dbContext.Users
+            .CountAsync(cancellationToken: ct);
+    }
+
+    public async Task<int> CountRestrictedUsers(CancellationToken ct = default)
+    {
+        return await dbContext.Users
+            .Where(u => u.AccountStatus == UserAccountStatus.Restricted)
+            .CountAsync(cancellationToken: ct);
+    }
+
+    public async Task<int> CountValidUsers(CancellationToken ct = default)
+    {
+        return await dbContext.Users
+            .FilterValidUsers()
+            .CountAsync(cancellationToken: ct);
+    }
+
+    public async Task<Result> UpdateUserUsername(UserEventAction userEventAction, string oldUsername, string newUsername)
+    {
+        return await databaseService.Value.CommitAsTransactionAsync(async () =>
+        {
+            var user = userEventAction.TargetUser ?? await databaseService.Value.Users.GetUser(id: userEventAction.TargetUserId);
+            if (user == null)
+                throw new Exception("User not found");
+
+            user.Username = newUsername;
+
+            var updateUserResult = await UpdateUser(user);
+            if (updateUserResult.IsFailure)
+                throw new Exception(updateUserResult.Error);
+
+            // TODO: Move outside
+            var result = await databaseService.Value.Events.Users.AddUserChangeUsernameEvent(userEventAction, oldUsername, newUsername);
+            if (result.IsFailure)
+                throw new Exception(result.Error);
+        });
+    }
+
+    public async Task<Result> UpdateUserCountry(UserEventAction userEventAction, CountryCode oldCountry, CountryCode newCountry)
+    {
+        return await databaseService.Value.CommitAsTransactionAsync(async () =>
+        {
+            var user = userEventAction.TargetUser ?? await databaseService.Value.Users.GetUser(id: userEventAction.TargetUserId);
+            if (user == null)
+                throw new Exception("User not found");
+
+            await dbContext.Entry(user).Collection(u => u.UserStats).LoadAsync();
+
+            foreach (var stats in user.UserStats)
+            {
+                await Ranks.DeleteUserCountryRanks(stats, user);
+            }
+
+            user.Country = newCountry;
+
+            var updateUserResult = await UpdateUser(user);
+            if (updateUserResult.IsFailure)
+                throw new Exception(updateUserResult.Error);
+
+            foreach (var stats in user.UserStats)
+            {
+                stats.BestCountryRank = long.MaxValue; // Reset user's best country rank
+                await Ranks.AddOrUpdateUserRanks(stats, user);
+            }
+
+            // TODO: Move outside
+            var addUserCountryChangeEventResult =
+                await databaseService.Value.Events.Users.AddUserChangeCountryEvent(userEventAction,
+                    oldCountry,
+                    newCountry);
+
+            if (addUserCountryChangeEventResult.IsFailure)
+                throw new Exception(addUserCountryChangeEventResult.Error);
+        });
+    }
+
+    public async Task<Result> UpdateUser(User user)
+    {
+        return await ResultUtil.TryExecuteAsync(async () =>
+        {
+            dbContext.UpdateEntity(user);
+            await dbContext.SaveChangesAsync();
+        });
+    }
+
+    public async Task<Result> DeleteUser(int userId)
+    {
+        return await databaseService.Value.CommitAsTransactionAsync(async () =>
+        {
+            var user = await GetUser(id: userId);
+            if (user == null)
+                throw new ApplicationException(QueryResultError.REQUESTED_RECORD_NOT_FOUND);
+
+            var isUserHasAnyLoginEvents = await databaseService.Value.Events.Users.IsUserHasAnyLoginEvents(user.Id);
+            var isUserHasAnyScore = await databaseService.Value.Scores.GetUserLastScore(userId) != null;
+
+            if (isUserHasAnyLoginEvents || isUserHasAnyScore || user.IsUserSunriseBot())
+            {
+                _logger.LogWarning("User {userUsername} has login events or some active score. Deleting user with any of these conditions is not allowed.", user.Username);
+                throw new ApplicationException(QueryResultError.CANT_REMOVE_REQUESTED_RECORD);
+            }
+
+            dbContext.Users.Remove(user);
+            await dbContext.SaveChangesAsync();
+        });
+    }
+
+    public async Task<(List<User>, int)> GetValidUsersByQueryLike(string queryLike, QueryOptions? options = null, CancellationToken ct = default)
+    {
+        var usersQuery = dbContext.Users
+            .FilterValidUsers()
+            .Where(q => EF.Functions.Like(q.Username, "%" + queryLike + "%"));
+
+        var totalCount = options?.IgnoreCountQueryIfExists == true ? -1 : await usersQuery.CountAsync(cancellationToken: ct);
+        var users = await usersQuery.IncludeUserThumbnails()
+            .UseQueryOptions(options).ToListAsync(cancellationToken: ct);
+
+        return (users, totalCount);
+    }
+
+    public async Task<(List<User>, int)> GetUsersBySensitiveInfoQueryLike(string? queryLike, QueryOptions? options = null, CancellationToken ct = default)
+    {
+        var usersQuery = dbContext.Users.AsQueryable();
+
+        int? userId = null;
+        if (int.TryParse(queryLike, out var parsedId))
+            userId = parsedId;
+
+        if (queryLike != null)
+            usersQuery = usersQuery.Where(q => EF.Functions.Like(q.Username, "%" + queryLike + "%")
+                                               || EF.Functions.Like(q.Email, "%" + queryLike + "%")
+                                               || userId.HasValue && q.Id == userId.Value
+            );
+
+
+        var totalCount = options?.IgnoreCountQueryIfExists == true ? -1 : await usersQuery.CountAsync(cancellationToken: ct);
+        var users = await usersQuery.IncludeUserThumbnails().UseQueryOptions(options).ToListAsync(cancellationToken: ct);
+
+        return (users, totalCount);
+    }
+}

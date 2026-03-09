@@ -1,0 +1,35 @@
+name: osu-sunrise-tests
+services:
+  redis:
+    image: redis:8.2.2
+    restart: unless-stopped
+    volumes:
+      - redis:/data
+    ports:
+      - "6339:6379"
+    networks:
+      - monitoring
+
+  mysql-sunrise-db:
+    image: mysql:oraclelinux9
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=test
+    volumes:
+      - mysql:/var/lib/mysql
+    ports:
+      - "3318:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql:
+  redis:
+
+networks:
+  monitoring:
+    driver: bridge

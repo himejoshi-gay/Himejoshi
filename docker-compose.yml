@@ -1,0 +1,95 @@
+name: osu-sunrise
+services:
+  sunrise:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - ${SUNRISE_PORT:-443}:443
+      - 5147:5147
+    volumes:
+      - ./Data:/app/Data
+      - ./Sunrise.Server/appsettings.Production.json:/app/appsettings.Production.json
+    env_file:
+      - ./.env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: https://+:443;http://+:5147
+      ASPNETCORE_Kestrel__Certificates__Default__Password: password
+      ASPNETCORE_Kestrel__Certificates__Default__Path: /app/certificate.pfx
+      OTEL_DOTNET_EXPERIMENTAL_ASPNETCORE_DISABLE_URL_QUERY_REDACTION: true
+      MYSQL_HOST: mysql-sunrise-db
+      MYSQL_PORT: ${MYSQL_PORT}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      HANGFIRE_HOST: mysql-sunrise-db
+      HANGFIRE_PORT: ${HANGFIRE_PORT}
+      HANGFIRE_USER: ${MYSQL_USER}
+      HANGFIRE_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - container_network
+    depends_on:
+      mysql-sunrise-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  redis:
+    image: redis:8.2.2
+    restart: unless-stopped
+    networks:
+      - container_network
+    volumes:
+      - redis:/data
+
+  mysql-sunrise-db:
+    image: mysql:oraclelinux9
+    restart: unless-stopped
+    environment:
+      - MYSQL_ONETIME_PASSWORD=true
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - HANGFIRE_HOST=${HANGFIRE_HOST}
+      - HANGFIRE_PORT=${HANGFIRE_PORT}
+      - HANGFIRE_USER=${HANGFIRE_USER}
+      - HANGFIRE_PASSWORD=${HANGFIRE_PASSWORD}
+    entrypoint: |
+      sh -c "
+      if [ \"\$HANGFIRE_HOST\" = \"\$MYSQL_HOST\" ] && [ \"\$HANGFIRE_PORT\" = \"\$MYSQL_PORT\" ]; then
+      cat > /docker-entrypoint-initdb.d/init.sql <<EOF
+      CREATE DATABASE IF NOT EXISTS hangfire;
+
+      CREATE USER IF NOT EXISTS '\$HANGFIRE_USER'@'%' IDENTIFIED BY '\$HANGFIRE_PASSWORD';
+      GRANT ALL PRIVILEGES ON hangfire.* TO '\$HANGFIRE_USER'@'%';
+      FLUSH PRIVILEGES;
+      EOF
+      else
+      echo \"Hangfire points to a different MySQL host/port — skipping Hangfire DB and user creation.\"
+      fi
+
+      exec /usr/local/bin/docker-entrypoint.sh --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+      "
+    networks:
+      - container_network
+    volumes:
+      - mysql:/var/lib/mysql
+    ports:
+      - ${MYSQL_PORT}:3306
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping -h localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql:
+  redis:
+
+networks:
+  container_network:
+    driver: bridge
