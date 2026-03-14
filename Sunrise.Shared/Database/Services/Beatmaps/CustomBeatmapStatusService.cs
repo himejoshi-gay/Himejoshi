@@ -17,11 +17,33 @@ public class CustomBeatmapStatusService(
     BeatmapHypeService beatmapHypeService,
     BeatmapEventService beatmapEventService)
 {
+    public async Task<CustomBeatmapStatus?> GetCustomBeatmapStatus(int beatmapId, string? beatmapHash = null, QueryOptions? options = null, CancellationToken ct = default)
+    {
+        var byBeatmapId = await dbContext.CustomBeatmapStatuses
+            .Where(m => m.BeatmapId == beatmapId)
+            .UseQueryOptions(options)
+            .OrderByDescending(m => m.Id)
+            .FirstOrDefaultAsync(cancellationToken: ct);
+
+        if (byBeatmapId != null)
+            return byBeatmapId;
+
+        if (string.IsNullOrEmpty(beatmapHash))
+            return null;
+
+        return await dbContext.CustomBeatmapStatuses
+            .Where(m => m.BeatmapHash == beatmapHash)
+            .UseQueryOptions(options)
+            .OrderByDescending(m => m.Id)
+            .FirstOrDefaultAsync(cancellationToken: ct);
+    }
+
     public async Task<CustomBeatmapStatus?> GetCustomBeatmapStatus(string beatmapHash, QueryOptions? options = null, CancellationToken ct = default)
     {
         return await dbContext.CustomBeatmapStatuses
             .Where(m => m.BeatmapHash == beatmapHash)
             .UseQueryOptions(options)
+            .OrderByDescending(m => m.Id)
             .FirstOrDefaultAsync(cancellationToken: ct);
     }
 
@@ -64,7 +86,7 @@ public class CustomBeatmapStatusService(
             if (applyBeatmapHypesResult.IsFailure)
                 throw new ApplicationException(applyBeatmapHypesResult.Error);
 
-            var addBeatmapStatusChangedEventResult = await beatmapEventService.AddBeatmapStatusChangedEvent(status.UpdatedByUserId, status.BeatmapSetId, status.BeatmapHash, status.Status);
+            var addBeatmapStatusChangedEventResult = await beatmapEventService.AddBeatmapStatusChangedEvent(status.UpdatedByUserId, status.BeatmapSetId, status.BeatmapHash, status.BeatmapId, status.Status);
             if (addBeatmapStatusChangedEventResult.IsFailure)
                 throw new ApplicationException(addBeatmapStatusChangedEventResult.Error);
 
@@ -77,7 +99,7 @@ public class CustomBeatmapStatusService(
     {
         return await databaseService.Value.CommitAsTransactionAsync(async () =>
         {
-            var addBeatmapStatusChangedEventResult = await beatmapEventService.AddBeatmapStatusChangedEvent(status.UpdatedByUserId, status.BeatmapSetId, status.BeatmapHash, status.Status);
+            var addBeatmapStatusChangedEventResult = await beatmapEventService.AddBeatmapStatusChangedEvent(status.UpdatedByUserId, status.BeatmapSetId, status.BeatmapHash, status.BeatmapId, status.Status);
             if (addBeatmapStatusChangedEventResult.IsFailure)
                 throw new ApplicationException(addBeatmapStatusChangedEventResult.Error);
 
@@ -90,7 +112,7 @@ public class CustomBeatmapStatusService(
     {
         return await databaseService.Value.CommitAsTransactionAsync(async () =>
         {
-            var addBeatmapStatusChangedEventResult = await beatmapEventService.AddBeatmapStatusChangedEvent(status.UpdatedByUserId, status.BeatmapSetId, status.BeatmapHash, null);
+            var addBeatmapStatusChangedEventResult = await beatmapEventService.AddBeatmapStatusChangedEvent(status.UpdatedByUserId, status.BeatmapSetId, status.BeatmapHash, status.BeatmapId, null);
             if (addBeatmapStatusChangedEventResult.IsFailure)
                 throw new ApplicationException(addBeatmapStatusChangedEventResult.Error);
 

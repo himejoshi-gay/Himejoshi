@@ -196,7 +196,7 @@ public class BeatmapService(ILogger<BeatmapService> logger, DatabaseService data
             return Result.Failure<CustomBeatmapStatus?>("User cannot change beatmap status.");
         }
 
-        var customStatus = await database.Beatmaps.CustomStatuses.GetCustomBeatmapStatus(beatmap.Checksum!);
+        var customStatus = await database.Beatmaps.CustomStatuses.GetCustomBeatmapStatus(beatmap.Id, beatmap.Checksum);
 
         if (resetCustomStatus.HasValue)
         {
@@ -214,6 +214,8 @@ public class BeatmapService(ILogger<BeatmapService> logger, DatabaseService data
             {
                 customStatus.Status = newStatus.Value;
                 customStatus.UpdatedByUserId = user.Id;
+                customStatus.BeatmapId = beatmap.Id;
+                customStatus.BeatmapHash = beatmap.Checksum;
 
                 var updateCustomStatusResult = await database.Beatmaps.CustomStatuses.UpdateCustomBeatmapStatus(customStatus);
                 return updateCustomStatusResult.IsFailure ? Result.Failure<CustomBeatmapStatus?>(updateCustomStatusResult.Error) : customStatus;
@@ -223,7 +225,8 @@ public class BeatmapService(ILogger<BeatmapService> logger, DatabaseService data
             {
                 Status = newStatus.Value,
                 UpdatedByUserId = user.Id,
-                BeatmapHash = beatmap.Checksum!,
+                BeatmapId = beatmap.Id,
+                BeatmapHash = beatmap.Checksum,
                 BeatmapSetId = beatmap.BeatmapsetId
             };
 

@@ -37,7 +37,8 @@ public class ApiGetBeatmapSetEventsTests(IntegrationDatabaseFixture fixture) : A
 
         for (var i = 0; i < 2; i++)
         {
-            await Database.Events.Beatmaps.AddBeatmapStatusChangedEvent(user.Id, beatmapSet.Id, beatmapSet.Beatmaps.First().Checksum ?? throw new InvalidOperationException(), BeatmapStatusWeb.Loved);
+            var beatmap = beatmapSet.Beatmaps.First();
+            await Database.Events.Beatmaps.AddBeatmapStatusChangedEvent(user.Id, beatmapSet.Id, beatmap.Checksum, beatmap.Id, BeatmapStatusWeb.Loved);
         }
 
         for (var i = 0; i < 3; i++)

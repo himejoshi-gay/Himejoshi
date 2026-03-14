@@ -44,7 +44,7 @@ public class BeatmapEventService(SunriseDbContext dbContext)
         });
     }
 
-    public async Task<Result> AddBeatmapStatusChangedEvent(int userId, int beatmapSetId, string beatmapHash, BeatmapStatusWeb? newStatus)
+    public async Task<Result> AddBeatmapStatusChangedEvent(int userId, int beatmapSetId, string? beatmapHash, int? beatmapId, BeatmapStatusWeb? newStatus)
     {
         return await ResultUtil.TryExecuteAsync(async () =>
         {
@@ -58,7 +58,8 @@ public class BeatmapEventService(SunriseDbContext dbContext)
             beatmapEvent.SetData(new BeatmapStatusChanged
             {
                 NewStatus = newStatus,
-                BeatmapHash = beatmapHash
+                BeatmapHash = beatmapHash,
+                BeatmapId = beatmapId
             });
 
             dbContext.EventBeatmaps.Add(beatmapEvent);

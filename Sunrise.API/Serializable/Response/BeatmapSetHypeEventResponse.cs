@@ -20,6 +20,7 @@ public class BeatmapEventResponse
         BeatmapEventType = eventBeatmap.EventType;
         BeatmapSetId = beatmapSet.Id;
         BeatmapSet = beatmapSet;
+        BeatmapId = !string.IsNullOrEmpty(eventBeatmap.JsonData) && eventBeatmap.EventType == BeatmapEventType.BeatmapStatusChanged ? eventBeatmap.GetData<BeatmapStatusChanged>()?.BeatmapId : null;
         BeatmapHash = !string.IsNullOrEmpty(eventBeatmap.JsonData) && eventBeatmap.EventType == BeatmapEventType.BeatmapStatusChanged ? eventBeatmap.GetData<BeatmapStatusChanged>()?.BeatmapHash : null;
         NewStatus = !string.IsNullOrEmpty(eventBeatmap.JsonData) && eventBeatmap.EventType == BeatmapEventType.BeatmapStatusChanged ? eventBeatmap.GetData<BeatmapStatusChanged>()?.NewStatus : null;
         CreatedAt = eventBeatmap.Time;
@@ -39,6 +40,10 @@ public class BeatmapEventResponse
 
     [JsonPropertyName("beatmapset")]
     public BeatmapSetResponse BeatmapSet { get; set; }
+
+    [JsonPropertyName("beatmap_id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BeatmapId { get; set; }
 
     [JsonPropertyName("beatmap_hash")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

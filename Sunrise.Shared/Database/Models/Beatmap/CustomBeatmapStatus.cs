@@ -6,13 +6,15 @@ using Sunrise.Shared.Enums.Beatmaps;
 namespace Sunrise.Shared.Database.Models.Beatmap;
 
 [Table("custom_beatmap_status")]
+[Index(nameof(BeatmapId))]
 [Index(nameof(BeatmapHash))]
 [Index(nameof(BeatmapSetId))]
 public class CustomBeatmapStatus
 {
     public int Id { get; set; }
     public required int BeatmapSetId { get; set; }
-    public required string BeatmapHash { get; set; }
+    public int? BeatmapId { get; set; }
+    public string? BeatmapHash { get; set; }
 
     [ForeignKey(nameof(UpdatedByUserId))]
     public User UpdatedByUser { get; set; }

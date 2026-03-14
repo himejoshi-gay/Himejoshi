@@ -27,7 +27,8 @@ public static class BeatmapSetExtensions
 
         foreach (var beatmap in beatmapSet.Beatmaps)
         {
-            var customStatus = customBeatmapStatuses.FirstOrDefault(s => s.BeatmapHash == beatmap.Checksum);
+            var customStatus = customBeatmapStatuses.FirstOrDefault(s => s.BeatmapId == beatmap.Id)
+                ?? customBeatmapStatuses.FirstOrDefault(s => s.BeatmapHash == beatmap.Checksum);
 
             if (customStatus != null)
                 beatmap.UpdateBeatmapRanking(customStatus.Status, customStatus.UpdatedByUser);
