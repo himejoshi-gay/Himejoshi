@@ -31,7 +31,7 @@ public class DirectService(BeatmapService beatmapService)
         var parsedStatus = BeatmapStatusSearchParser.WebStatusToSearchStatus(ranked);
         var beatmapStatus = parsedStatus == BeatmapStatusWeb.Unknown ? "" : parsedStatus.ToString("D");
 
-        var beatmapSetsResult = await beatmapService.SearchBeatmapSets(session, beatmapStatus, mode, query, new Pagination(page - 1, 100), ct);
+        var beatmapSetsResult = await beatmapService.SearchBeatmapSets(session, beatmapStatus, mode, query, new Pagination(page - 1, 100), ct: ct);
 
         if (beatmapSetsResult.IsFailure)
             return "0";

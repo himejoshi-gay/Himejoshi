@@ -421,6 +421,8 @@ public class BeatmapController(DatabaseService database, BeatmapService beatmapS
     [ProducesResponseType(typeof(BeatmapSetsResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> SearchBeatmapsets(
         [FromQuery(Name = "query")] string? query,
+        [FromQuery(Name = "artist")] string? artist,
+        [FromQuery(Name = "title")] string? title,
         [FromQuery(Name = "status")] BeatmapStatusWeb[]? status,
         [Range((int)GameMode.Standard, (int)GameMode.Mania)] [FromQuery(Name = "mode")]
         GameMode? mode,
@@ -467,6 +469,8 @@ public class BeatmapController(DatabaseService database, BeatmapService beatmapS
             beatmapSetGameMode.ToString(),
             query,
             new Pagination(page - 1, limit),
+            artist,
+            title,
             ct);
 
         if (beatmapSetsResult.IsFailure)
