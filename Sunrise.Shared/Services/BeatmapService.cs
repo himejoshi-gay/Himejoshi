@@ -126,11 +126,16 @@ public class BeatmapService(ILogger<BeatmapService> logger, DatabaseService data
     }
 
     public async Task<Result<List<BeatmapSet>, ErrorMessage>> SearchBeatmapSets(BaseSession session, string? rankedStatus, string mode,
-        string query, Pagination pagination, CancellationToken ct = default)
+        string? query, Pagination pagination, string? artist = null, string? title = null, CancellationToken ct = default)
     {
+        var searchQuery = query;
+
+        if (string.IsNullOrEmpty(searchQuery))
+            searchQuery = string.Join(" ", new[] { artist, title }.Where(s => !string.IsNullOrEmpty(s)));
+
         var beatmapSetsResult = await client.SendRequest<List<BeatmapSet>>(session,
             ApiType.BeatmapSetSearch,
-            [query, pagination.PageSize, pagination.Page * pagination.PageSize, rankedStatus, mode],
+            [searchQuery, pagination.PageSize, pagination.Page * pagination.PageSize, rankedStatus, mode],
             ct: ct);
 
         if (beatmapSetsResult.IsFailure)
@@ -139,6 +144,12 @@ public class BeatmapService(ILogger<BeatmapService> logger, DatabaseService data
         var beatmapSets = beatmapSetsResult.Value;
 
         if (beatmapSets == null) return new List<BeatmapSet>();
+
+        if (!string.IsNullOrEmpty(artist))
+            beatmapSets = beatmapSets.Where(s => string.Equals(s.Artist, artist, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (!string.IsNullOrEmpty(title))
+            beatmapSets = beatmapSets.Where(s => string.Equals(s.Title, title, StringComparison.OrdinalIgnoreCase)).ToList();
 
         foreach (var set in beatmapSets)
         {
