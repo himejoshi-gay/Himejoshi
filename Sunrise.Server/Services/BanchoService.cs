@@ -37,7 +37,7 @@ public class BanchoService
         var eventImageUri = $"https://assets.{Configuration.Domain}/events/EventBanner.jpg";
 
         var json =
-            """{ "images": [{ "image": "{img}", "url": "https://github.com/SunriseCommunity/Sunrise", "IsCurrent": true, "begins": null, "expires": "2099-06-01T12:00:00+00:00"}] }""";
+            """{ "images": [{ "image": "{img}", "url": "https://github.com/himejoshi-gay", "IsCurrent": true, "begins": null, "expires": "2099-06-01T12:00:00+00:00"}] }""";
         json = json.Replace("{img}", eventImageUri);
 
         return json;

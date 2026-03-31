@@ -40,11 +40,39 @@ public class UserModerationService(
             .Select(r => r.ExpiryDate)
             .FirstOrDefaultAsync(cancellationToken: ct);
 
+        var user = await databaseService.Value.Users.GetUser(userId);
+
         if (restrictionExpiryDate == DateTime.MinValue)
+        {
+            if (user?.AccountStatus == UserAccountStatus.Restricted)
+            {
+                user.AccountStatus = UserAccountStatus.Active;
+                var updateUserResult = await databaseService.Value.Users.UpdateUser(user);
+
+                if (updateUserResult.IsSuccess)
+                    await RefreshUserStats(user);
+                else
+                    _logger.LogWarning("Detected restriction state mismatch for user {UserId} (no restriction row but restricted status), but failed to update user status: {Error}", userId, updateUserResult.Error);
+            }
+
             return false;
+        }
 
         if (restrictionExpiryDate >= DateTime.UtcNow)
+        {
+            if (user != null && user.AccountStatus != UserAccountStatus.Restricted)
+            {
+                user.AccountStatus = UserAccountStatus.Restricted;
+                var updateUserResult = await databaseService.Value.Users.UpdateUser(user);
+
+                if (updateUserResult.IsSuccess)
+                    await RefreshUserStats(user);
+                else
+                    _logger.LogWarning("Detected restriction state mismatch for user {UserId} (active restriction row but non-restricted status), but failed to update user status: {Error}", userId, updateUserResult.Error);
+            }
+
             return true;
+        }
 
         await UnrestrictPlayer(userId);
 

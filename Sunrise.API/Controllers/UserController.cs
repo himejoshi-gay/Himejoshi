@@ -49,7 +49,7 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
         if (user == null)
             return Problem(ApiErrorResponse.Detail.UserNotFound, statusCode: StatusCodes.Status404NotFound);
 
-        if (user.IsRestricted())
+        if (await database.Users.Moderation.IsUserRestricted(user.Id, ct))
             return Problem(ApiErrorResponse.Detail.UserIsRestricted, statusCode: StatusCodes.Status404NotFound);
 
         return Ok(new UserResponse(sessions, user));
@@ -69,7 +69,12 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
         if (user == null)
             return Problem(ApiErrorResponse.Detail.UserNotFound, statusCode: StatusCodes.Status404NotFound);
 
-        return Ok(new UserSensitiveResponse(sessions, user));
+        var response = new UserSensitiveResponse(sessions, user)
+        {
+            IsRestricted = await database.Users.Moderation.IsUserRestricted(user.Id, ct)
+        };
+
+        return Ok(response);
     }
 
     [HttpGet]
@@ -89,7 +94,7 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
         if (user == null)
             return Problem(ApiErrorResponse.Detail.UserNotFound, statusCode: StatusCodes.Status404NotFound);
 
-        if (user.IsRestricted())
+        if (await database.Users.Moderation.IsUserRestricted(user.Id, ct))
             return Problem(ApiErrorResponse.Detail.UserIsRestricted, statusCode: StatusCodes.Status404NotFound);
 
         var userStats = user.UserStats.FirstOrDefault(m => m.GameMode == mode);
@@ -245,7 +250,7 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
         if (user == null)
             return Problem(ApiErrorResponse.Detail.UserNotFound, statusCode: StatusCodes.Status404NotFound);
 
-        if (user.IsRestricted())
+        if (await database.Users.Moderation.IsUserRestricted(user.Id, ct))
             return Problem(ApiErrorResponse.Detail.UserIsRestricted, statusCode: StatusCodes.Status404NotFound);
 
         var userStats = user.UserStats.FirstOrDefault(m => m.GameMode == mode);
@@ -297,7 +302,7 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
         if (user == null)
             return Problem(ApiErrorResponse.Detail.UserNotFound, statusCode: StatusCodes.Status404NotFound);
 
-        if (user.IsRestricted())
+        if (await database.Users.Moderation.IsUserRestricted(user.Id, ct))
             return Problem(ApiErrorResponse.Detail.UserIsRestricted, statusCode: StatusCodes.Status404NotFound);
 
         var playHistorySnapshots = await database.Scores.GetUserPlayHistoryScores(userId, ct);
@@ -326,7 +331,7 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
         if (user == null)
             return Problem(ApiErrorResponse.Detail.UserNotFound, statusCode: StatusCodes.Status404NotFound);
 
-        if (user.IsRestricted())
+        if (await database.Users.Moderation.IsUserRestricted(user.Id, ct))
             return Problem(ApiErrorResponse.Detail.UserIsRestricted, statusCode: StatusCodes.Status404NotFound);
 
         var (scores, totalScores) = await database.Scores.GetUserScores(user.Id,
@@ -366,7 +371,7 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
         if (user == null)
             return Problem(ApiErrorResponse.Detail.UserNotFound, statusCode: StatusCodes.Status404NotFound);
 
-        if (user.IsRestricted())
+        if (await database.Users.Moderation.IsUserRestricted(user.Id, ct))
             return Problem(ApiErrorResponse.Detail.UserIsRestricted, statusCode: StatusCodes.Status404NotFound);
 
         var (beatmapsIds, totalIdsCount) = await database.Scores.GetUserMostPlayedBeatmapIds(id, mode, new QueryOptions(true, new Pagination(page, limit)), ct);
@@ -409,7 +414,7 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
         if (user == null)
             return Problem(ApiErrorResponse.Detail.UserNotFound, statusCode: StatusCodes.Status404NotFound);
 
-        if (user.IsRestricted())
+        if (await database.Users.Moderation.IsUserRestricted(user.Id, ct))
             return Problem(ApiErrorResponse.Detail.UserIsRestricted, statusCode: StatusCodes.Status404NotFound);
 
         var (favourites, favouritesCount) = await database.Users.Favourites.GetUserFavouriteBeatmapIds(id, new QueryOptions(true, new Pagination(page, limit)), ct);
@@ -788,7 +793,7 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
 
         if (user == null) return Problem(ApiErrorResponse.Detail.UserNotFound, statusCode: StatusCodes.Status404NotFound);
 
-        if (user.IsRestricted())
+        if (await database.Users.Moderation.IsUserRestricted(user.Id, ct))
             return Problem(ApiErrorResponse.Detail.UserIsRestricted, statusCode: StatusCodes.Status404NotFound);
 
         return Ok(new GradesResponse(userGrades));
@@ -812,7 +817,7 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
 
         var currentUser = HttpContext.GetCurrentUser();
 
-        if (user.IsRestricted() && (currentUser == null || !currentUser.Privilege.HasFlag(UserPrivilege.Admin)))
+        if (await database.Users.Moderation.IsUserRestricted(user.Id, ct) && (currentUser == null || !currentUser.Privilege.HasFlag(UserPrivilege.Admin)))
             return Problem(ApiErrorResponse.Detail.UserIsRestricted, statusCode: StatusCodes.Status404NotFound);
 
         return Ok(new UserMetadataResponse(userMetadata));
