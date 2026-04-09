@@ -6,6 +6,7 @@ using Sunrise.Shared.Database.Models.Users;
 using Sunrise.Shared.Database.Objects;
 using Sunrise.Shared.Enums.Leaderboards;
 using Sunrise.Shared.Utils;
+using Sunrise.Shared.Enums.Users;
 using GameMode = Sunrise.Shared.Enums.Beatmaps.GameMode;
 
 namespace Sunrise.Shared.Database.Services.Users;
