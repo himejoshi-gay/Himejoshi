@@ -73,24 +73,10 @@ public class UserStatsService(
 
     public async Task<List<UserStats>> GetUsersStats(GameMode mode, LeaderboardSortType leaderboardSortType, List<int>? userIds = null, QueryOptions? options = null, CountryCode? country = null, bool addMissingUserStats = true, CancellationToken ct = default)
     {
-        IQueryable<UserStats> statsQuery;
+        var statsQuery = dbContext.UserStats.Where(e => e.GameMode == mode);
 
         if (country != null)
-        {
-            statsQuery = dbContext.Users
-                .Where(u => u.Country == country)
-                .SelectMany(u => u.UserStats)
-                .Where(s => s.GameMode == mode);
-        }
-        else
-        {
-            statsQuery = dbContext.UserStats.Where(e => e.GameMode == mode);
-        }
-
-        if (userIds != null)
-        {
-            statsQuery = statsQuery.Where(us => userIds.Contains(us.UserId));
-        }
+            statsQuery = statsQuery.Where(e => dbContext.Users.Where(u => u.Country == country).Select(u => u.Id).Contains(e.UserId));
 
         statsQuery = leaderboardSortType switch
         {
@@ -105,16 +91,22 @@ public class UserStatsService(
             _ => throw new ArgumentOutOfRangeException(nameof(leaderboardSortType), leaderboardSortType, null)
         };
 
+        if (userIds != null) statsQuery = statsQuery.Where(us => userIds.Contains(us.UserId));
+
         var stats = await statsQuery
             .FilterValidUserStats()
             .UseQueryOptions(options)
             .ToListAsync(cancellationToken: ct);
 
-        if (addMissingUserStats && userIds != null && stats.Count != userIds.Count)
+        var isSomeStatsMissing = userIds != null && stats.Count != userIds.Count;
+
+        if (isSomeStatsMissing && addMissingUserStats)
         {
-            var usersWithoutStats = await dbContext.Users
-                .Where(u => userIds.Contains(u.Id) && !stats.Select(s => s.UserId).Contains(u.Id))
-                .ToListAsync(ct);
+            var users = await databaseService.Value.Users.GetValidUsers(userIds, ct: ct);
+            if (users.Count == stats.Count)
+                return stats; // We return only valid users stats, so if we can't find user by user id in valid users, user stats can't exist
+
+            var usersWithoutStats = users.Where(u => !stats.Select(us => us.UserId).Contains(u.Id));
 
             var transactionResult = await databaseService.Value.CommitAsTransactionAsync(async () =>
                 {

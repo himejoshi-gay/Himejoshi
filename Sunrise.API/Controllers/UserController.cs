@@ -477,29 +477,25 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
     public async Task<IActionResult> GetLeaderboard(
         [FromQuery(Name = "mode")] GameMode mode,
         [FromQuery(Name = "type")] LeaderboardSortType leaderboardType,
-        [FromQuery(Name = "country")] string? country,
+        [FromQuery(Name = "country")] CountryCode? country,
         [Range(1, 100)] [FromQuery(Name = "limit")]
         int limit = 50,
         [Range(1, int.MaxValue)] [FromQuery(Name = "page")]
         int page = 1,
         CancellationToken ct = default)
     {
-        CountryCode? countryCode = null;
-        if (!string.IsNullOrWhiteSpace(country) && Enum.TryParse<CountryCode>(country, true, out var parsed))
-            countryCode = parsed;
+        var countUsers = await database.Users.CountValidUsers(country, ct);
 
-        var countUsers = await database.Users.CountValidUsers(countryCode, ct);
+        var stats = await database.Users.Stats.GetUsersStats(mode,
+            leaderboardType,
+            country: country,
+            options: new QueryOptions(true, new Pagination(page, limit))
+            {
+                QueryModifier = query => query.Cast<UserStats>().IncludeUser()
+            },
+            ct: ct);
 
-        var pagination = new Pagination(page, limit);
-        var options = new QueryOptions(true, pagination)
-        {
-            QueryModifier = query => query.Cast<UserStats>().IncludeUser()
-        };
-
-        var stats = await database.Users.Stats.GetUsersStats(mode, leaderboardType, country: countryCode, options: options, ct: ct);
-
-        if (stats.Count <= 0)
-            return Problem(ApiErrorResponse.Detail.UserStatsNotFound, statusCode: StatusCodes.Status404NotFound);
+        if (stats.Count <= 0) return Problem(ApiErrorResponse.Detail.UserStatsNotFound, statusCode: StatusCodes.Status404NotFound);
 
         var usersWithStatsTask = stats.Select(async userStats =>
         {
