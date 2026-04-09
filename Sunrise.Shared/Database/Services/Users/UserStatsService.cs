@@ -76,7 +76,7 @@ public class UserStatsService(
         var statsQuery = dbContext.UserStats.Where(e => e.GameMode == mode);
 
         if (country != null)
-            statsQuery = statsQuery.Where(e => e.User.Country == country);
+            statsQuery = statsQuery.Where(e => dbContext.Users.Any(u => u.Id == e.UserId && u.Country == country));
 
         statsQuery = leaderboardSortType switch
         {

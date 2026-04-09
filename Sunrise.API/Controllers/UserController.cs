@@ -477,18 +477,22 @@ public class UserController(BeatmapService beatmapService, DatabaseService datab
     public async Task<IActionResult> GetLeaderboard(
         [FromQuery(Name = "mode")] GameMode mode,
         [FromQuery(Name = "type")] LeaderboardSortType leaderboardType,
-        [FromQuery(Name = "country")] CountryCode? country,
+        [FromQuery(Name = "country")] string? country,
         [Range(1, 100)] [FromQuery(Name = "limit")]
         int limit = 50,
         [Range(1, int.MaxValue)] [FromQuery(Name = "page")]
         int page = 1,
         CancellationToken ct = default)
     {
-        var countUsers = await database.Users.CountValidUsers(country, ct);
+        CountryCode? countryCode = null;
+        if (!string.IsNullOrWhiteSpace(country) && Enum.TryParse<CountryCode>(country, true, out var parsedCountry))
+            countryCode = parsedCountry;
+
+        var countUsers = await database.Users.CountValidUsers(countryCode, ct);
 
         var stats = await database.Users.Stats.GetUsersStats(mode,
             leaderboardType,
-            country: country,
+            country: countryCode,
             options: new QueryOptions(true, new Pagination(page, limit))
             {
                 QueryModifier = query => query.Cast<UserStats>().IncludeUser()
