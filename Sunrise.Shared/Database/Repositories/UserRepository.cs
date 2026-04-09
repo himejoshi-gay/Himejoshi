@@ -189,11 +189,14 @@ public class UserRepository(
             .CountAsync(cancellationToken: ct);
     }
 
-    public async Task<int> CountValidUsers(CancellationToken ct = default)
+    public async Task<int> CountValidUsers(CountryCode? country = null, CancellationToken ct = default)
     {
-        return await dbContext.Users
-            .FilterValidUsers()
-            .CountAsync(cancellationToken: ct);
+        var usersQuery = dbContext.Users.FilterValidUsers();
+
+        if (country != null)
+            usersQuery = usersQuery.Where(u => u.Country == country);
+
+        return await usersQuery.CountAsync(cancellationToken: ct);
     }
 
     public async Task<Result> UpdateUserUsername(UserEventAction userEventAction, string oldUsername, string newUsername)
