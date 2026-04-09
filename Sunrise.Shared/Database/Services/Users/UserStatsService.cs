@@ -5,6 +5,7 @@ using Sunrise.Shared.Database.Extensions;
 using Sunrise.Shared.Database.Models.Users;
 using Sunrise.Shared.Database.Objects;
 using Sunrise.Shared.Enums.Leaderboards;
+using Sunrise.Shared.Enums.Users;
 using Sunrise.Shared.Utils;
 using GameMode = Sunrise.Shared.Enums.Beatmaps.GameMode;
 
@@ -71,9 +72,12 @@ public class UserStatsService(
         return stats;
     }
 
-    public async Task<List<UserStats>> GetUsersStats(GameMode mode, LeaderboardSortType leaderboardSortType, List<int>? userIds = null, QueryOptions? options = null, bool addMissingUserStats = true, CancellationToken ct = default)
+    public async Task<List<UserStats>> GetUsersStats(GameMode mode, LeaderboardSortType leaderboardSortType, List<int>? userIds = null, QueryOptions? options = null, CountryCode? country = null, bool addMissingUserStats = true, CancellationToken ct = default)
     {
         var statsQuery = dbContext.UserStats.Where(e => e.GameMode == mode);
+
+        if (country != null)
+            statsQuery = statsQuery.Where(e => dbContext.Users.Where(u => u.Country == country).Select(u => u.Id).Contains(e.UserId));
 
         statsQuery = leaderboardSortType switch
         {
@@ -123,7 +127,7 @@ public class UserStatsService(
             if (transactionResult.IsFailure)
                 throw new Exception(transactionResult.Error);
 
-            return await GetUsersStats(mode, leaderboardSortType, userIds, options, false);
+            return await GetUsersStats(mode, leaderboardSortType, userIds, options, country, false, ct);
         }
 
         return stats;

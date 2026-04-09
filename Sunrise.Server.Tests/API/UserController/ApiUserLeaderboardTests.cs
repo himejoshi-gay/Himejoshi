@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using Sunrise.API.Serializable.Response;
 using Sunrise.Shared.Enums.Beatmaps;
+using Sunrise.Shared.Enums.Users;
 using Sunrise.Tests.Abstracts;
 using Sunrise.Tests.Extensions;
 using Sunrise.Tests.Services.Mock;
@@ -176,5 +177,53 @@ public class ApiUserLeaderboardTests(IntegrationDatabaseFixture fixture) : ApiTe
 
         Assert.Single(responseData.Users);
         Assert.Equivalent(userIdsSortedByPp.SkipLast(1).LastOrDefault(), responseData.Users.FirstOrDefault()?.User.Id);
+    }
+
+    [Fact]
+    public async Task TestLeaderboardFiltersByCountry()
+    {
+        // Arrange
+        var client = App.CreateClient().UseClient("api");
+        var gamemode = _mocker.Score.GetRandomGameMode();
+
+        var usTopUser = _mocker.User.GetRandomUser();
+        usTopUser.Country = CountryCode.US;
+        usTopUser = await CreateTestUser(usTopUser);
+
+        var usLowerUser = _mocker.User.GetRandomUser();
+        usLowerUser.Country = CountryCode.US;
+        usLowerUser = await CreateTestUser(usLowerUser);
+
+        var jpHigherUser = _mocker.User.GetRandomUser();
+        jpHigherUser.Country = CountryCode.JP;
+        jpHigherUser = await CreateTestUser(jpHigherUser);
+
+        var usTopStats = await Database.Users.Stats.GetUserStats(usTopUser.Id, gamemode);
+        var usLowerStats = await Database.Users.Stats.GetUserStats(usLowerUser.Id, gamemode);
+        var jpHigherStats = await Database.Users.Stats.GetUserStats(jpHigherUser.Id, gamemode);
+
+        if (usTopStats == null || usLowerStats == null || jpHigherStats == null)
+            throw new Exception("User stats not found");
+
+        usTopStats.PerformancePoints = 200;
+        usLowerStats.PerformancePoints = 100;
+        jpHigherStats.PerformancePoints = 300;
+
+        await Database.Users.Stats.UpdateUserStats(usTopStats, usTopUser);
+        await Database.Users.Stats.UpdateUserStats(usLowerStats, usLowerUser);
+        await Database.Users.Stats.UpdateUserStats(jpHigherStats, jpHigherUser);
+
+        // Act
+        var response = await client.GetAsync($"user/leaderboard?mode={(int)gamemode}&type=Pp&page=1&limit=10&country=US");
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+
+        var responseData = await response.Content.ReadFromJsonAsyncWithAppConfig<LeaderboardResponse>();
+        Assert.NotNull(responseData);
+
+        Assert.Equal(2, responseData.TotalCount);
+        Assert.Equal([usTopUser.Id, usLowerUser.Id], responseData.Users.Select(x => x.User.Id));
+        Assert.All(responseData.Users, x => Assert.Equal(CountryCode.US, x.User.Country));
     }
 }
