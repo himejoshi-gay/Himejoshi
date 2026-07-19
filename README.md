@@ -10,7 +10,7 @@ website.
 
 
 > [!NOTE]
-> Want to help? Have a question? :shipit: Feel free to join our [Discord server](https://discord.gg/himejoshi), and ask any of our respective maintainers.
+> Want to help? Have a question? :shipit: Feel free to join our [Discord server](https://discord.gg/osugame), and ask any of our respective maintainers.
 
 
 ## 🖼️ Preview
