@@ -3,6 +3,7 @@
   "General": {
     "WelcomeMessage": "Welcome to Sunrise!",
     "MedalMirrorUrl": "https://raw.githubusercontent.com/SunriseCommunity/Server-Assets/main/medals/",
+    "BeatmapMirrorDownloadUrl": "https://mirror.hinamizawa.ai/api/v1/hinai/d",
     "IgnoreBeatmapRanking": false,
     "IncludeUserTokenInLogs": false,
     "UseCustomBackgrounds": true,

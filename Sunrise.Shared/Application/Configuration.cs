@@ -105,6 +105,14 @@ public static class Configuration
 
     public static string MedalMirrorUrl => Config.GetSection("General").GetValue<string?>("MedalMirrorUrl") ?? "";
 
+    // mirror we redirect osu!direct downloads to. MUST be an endpoint that streams the .osz bytes back,
+    // not one that hands back json/a redirect. we append the set id as {url}/{id} and the client's
+    // no-video "n" suffix rides along untouched.
+    // default is hinamizawa's proxy-stream route (/api/v1/hinai/d) - verified it serves real .osz bytes.
+    // the plain /d/{id} on that host returns json + defaults to osu.ppy.sh (needs a login), so don't use it. - wooksi
+    public static string BeatmapMirrorDownloadUrl =>
+        Config.GetSection("General").GetValue<string?>("BeatmapMirrorDownloadUrl") ?? "https://mirror.hinamizawa.ai/api/v1/hinai/d";
+
     public static int GeneralCallsPerWindow =>
         Config.GetSection("General").GetSection("RateLimit").GetValue<int?>("CallsPerWindow") ?? 100;
 
