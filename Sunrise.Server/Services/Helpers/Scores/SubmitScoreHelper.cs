@@ -116,6 +116,18 @@ public static class SubmitScoreHelper
                mods.HasFlag(Mods.Autoplay);
     }
 
+    public static bool HasInvalidClockRate(Score score)
+    {
+        if (!double.IsFinite(score.ClockRate) || score.ClockRate < 0.5 || score.ClockRate > 2.0)
+            return true;
+
+        var hasDoubleTime = score.Mods.HasFlag(Mods.DoubleTime) || score.Mods.HasFlag(Mods.Nightcore);
+        if (hasDoubleTime && Math.Abs(score.ClockRate - 1.5) > 0.001)
+            return true;
+
+        return score.Mods.HasFlag(Mods.HalfTime) && Math.Abs(score.ClockRate - 0.75) > 0.001;
+    }
+
     public static int GetTimeElapsed(Score score, int scoreTime, int scoreFailTime)
     {
         var isPassed = score.IsPassed || score.Mods.HasFlag(Mods.NoFail);

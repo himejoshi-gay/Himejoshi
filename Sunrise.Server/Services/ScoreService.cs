@@ -60,6 +60,13 @@ public class ScoreService(BeatmapService beatmapService, DatabaseService databas
         }
 
         var (score, sessionUsername) = scoreSerialized.TryParseToSubmittedScore(session, beatmap, scoreSubmittedAt);
+
+        if (SubmitScoreHelper.HasInvalidClockRate(score))
+        {
+            SubmitScoreHelper.ReportRejectionToMetrics(session, scoreSerialized, "Invalid clock rate");
+            return "error: no";
+        }
+
         var dbScore = await database.Scores.GetScore(score.ScoreHash); // TODO: Score hash is not indexed, this is heavy performance downside. Consider refactoring to score uploading queue and checking if unique by inserting. (Insert score -> Process -> If in the valid request timeframe (API ratelimits can make score wait in queue), return score submission response)
 
         if (dbScore != null)

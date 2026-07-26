@@ -256,6 +256,9 @@ namespace Sunrise.Shared.Database.Migrations
                     b.Property<DateTime>("ClientTime")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<double>("ClockRate")
+                        .HasColumnType("double");
+
                     b.Property<int>("Count100")
                         .HasColumnType("int");
 

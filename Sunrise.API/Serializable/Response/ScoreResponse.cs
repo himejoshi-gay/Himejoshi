@@ -34,6 +34,8 @@ public class ScoreResponse
         LeaderboardRank = score.LocalProperties.LeaderboardPosition;
         MaxCombo = score.MaxCombo;
         Mods = score.Mods.GetModsString();
+        if (score.UsesCustomRate)
+            Mods = $"{Mods}RC {score.ClockRate:0.00}x".Trim();
         ModsInt = (int)score.Mods;
         Perfect = score.Perfect;
         PerformancePoints = score.PerformancePoints;
@@ -42,10 +44,14 @@ public class ScoreResponse
         WhenPlayed = score.WhenPlayed;
         User = new UserResponse(sessionRepository, score.User);
         Accuracy = score.Accuracy;
+        ClockRate = score.ClockRate;
     }
 
     [JsonPropertyName("accuracy")]
     public double Accuracy { get; set; }
+
+    [JsonPropertyName("clock_rate")]
+    public double ClockRate { get; set; }
 
     [JsonPropertyName("beatmap_id")]
     public int BeatmapId { get; set; }

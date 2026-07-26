@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using osu.Shared;
 using Sunrise.Shared.Application;
@@ -114,6 +115,15 @@ public static class ScoreExtensions
     {
         var split = scoreString.Split(':');
 
+        var mods = (Mods)int.Parse(split[13]);
+        var clockRate = split.Length > 18
+            ? double.Parse(split[18], CultureInfo.InvariantCulture)
+            : mods.HasFlag(Mods.DoubleTime) || mods.HasFlag(Mods.Nightcore)
+                ? 1.5
+                : mods.HasFlag(Mods.HalfTime)
+                    ? 0.75
+                    : 1.0;
+
         var score = new Score
         {
             BeatmapHash = split[0],
@@ -130,14 +140,16 @@ public static class ScoreExtensions
             MaxCombo = int.Parse(split[10]),
             Perfect = bool.Parse(split[11]),
             Grade = split[12],
-            Mods = (Mods)int.Parse(split[13]),
+            Mods = mods,
             IsPassed = bool.Parse(split[14]),
             IsScoreable = beatmap.IsScoreable,
             GameMode = (GameMode)int.Parse(split[15]),
             WhenPlayed = scoreSubmittedAt,
             OsuVersion = split[17].Trim(),
             BeatmapStatus = beatmap.Status,
-            ClientTime = DateTime.ParseExact(split[16], "yyMMddHHmmss", null)
+            ClientTime = DateTime.ParseExact(split[16], "yyMMddHHmmss", null),
+            ClockRate = clockRate,
+            HasClockRateMetadata = split.Length > 18
         };
 
         score.LocalProperties = score.LocalProperties.FromScore(score);
@@ -149,7 +161,8 @@ public static class ScoreExtensions
 
     public static string ToScoreString(this Score score, string userUsername)
     {
-        return string.Join(":",
+        var fields = new List<string>
+        {
             score.BeatmapHash,
             userUsername,
             score.ScoreHash,
@@ -167,7 +180,12 @@ public static class ScoreExtensions
             score.IsPassed.ToString(),
             ((int)score.GameMode.ToVanillaGameMode()).ToString(),
             score.ClientTime.ToString("yyMMddHHmmss"),
-            score.OsuVersion);
+            score.OsuVersion
+        };
+        if (score.HasClockRateMetadata)
+            fields.Add(score.ClockRate.ToString("0.00", CultureInfo.InvariantCulture));
+
+        return string.Join(":", fields);
     }
 
 
@@ -196,12 +214,12 @@ public static class ScoreExtensions
         var totalScore = score.GameMode.IsGameModeWithoutScoreMultiplier() ? (int)score.PerformancePoints : score.TotalScore;
 
         return
-            $"{score.Id}|{score.User.Username}|{totalScore}|{score.MaxCombo}|{score.Count50}|{score.Count100}|{score.Count300}|{score.CountMiss}|{score.CountKatu}|{score.CountGeki}|{score.Perfect}|{(int)score.Mods}|{score.UserId}|{score.LocalProperties.LeaderboardPosition}|{time}|{hasReplay}";
+            $"{score.Id}|{score.User.Username}|{totalScore}|{score.MaxCombo}|{score.Count50}|{score.Count100}|{score.Count300}|{score.CountMiss}|{score.CountKatu}|{score.CountGeki}|{score.Perfect}|{(int)score.Mods}|{score.UserId}|{score.LocalProperties.LeaderboardPosition}|{time}|{hasReplay}|{score.ClockRate.ToString("0.00", CultureInfo.InvariantCulture)}";
     }
 
     public static string ComputeOnlineHash(this Score score, string username, string clientHash, string? storyboardHash)
     {
-        return string.Format(
+        var hashInput = string.Format(
             "chickenmcnuggets{0}o15{1}{2}smustard{3}{4}uu{5}{6}{7}{8}{9}{10}{11}Q{12}{13}{15}{14:yyMMddHHmmss}{16}{17}",
             score.Count300 + score.Count100,
             score.Count50,
@@ -220,7 +238,11 @@ public static class ScoreExtensions
             score.ClientTime,
             score.OsuVersion,
             clientHash,
-            storyboardHash).ToHash();
+            storyboardHash);
+        if (score.HasClockRateMetadata)
+            hashInput += score.ClockRate.ToString("0.00", CultureInfo.InvariantCulture);
+
+        return hashInput.ToHash();
     }
 
     public static async Task<string> GetBeatmapInGameChatString(this Score score, BeatmapSet beatmapSet, Session session)

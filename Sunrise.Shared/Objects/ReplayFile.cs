@@ -18,6 +18,8 @@ namespace Sunrise.Shared.Objects;
 
 public class ReplayFile
 {
+    private const int CustomRateMarker = 0x43524D48;
+
     public ReplayFile(Score score, byte[] rawReplay, User? user = null)
     {
         Score = score;
@@ -56,6 +58,7 @@ public class ReplayFile
         Score.MaxCombo = reader.ReadUInt16();
         Score.Perfect = reader.ReadBoolean();
         Score.Mods = (Mods)reader.ReadInt32();
+        Score.ClockRate = Score.NominalClockRate;
         Score.GameMode = vanillaGameMode.EnrichWithMods(Score.Mods);
         reader.ReadString(); // Life graph  
         Score.WhenPlayed = reader.ReadDateTime();
@@ -64,6 +67,24 @@ public class ReplayFile
         int.TryParse(Score.OsuVersion, out var version);
         if (version >= 20140721)
             Score.Id = (int)reader.ReadInt64();
+
+        if (Score.Mods.HasFlag(Mods.Target) && reader.BaseStream.Length - reader.BaseStream.Position >= sizeof(double))
+            reader.ReadDouble();
+
+        if (reader.BaseStream.Length - reader.BaseStream.Position >= sizeof(int) + sizeof(double))
+        {
+            var position = reader.BaseStream.Position;
+            if (reader.ReadInt32() == CustomRateMarker)
+            {
+                var clockRate = reader.ReadDouble();
+                if (clockRate is >= 0.5 and <= 2.0)
+                    Score.ClockRate = clockRate;
+            }
+            else
+            {
+                reader.BaseStream.Position = position;
+            }
+        }
     }
 
     private Score Score { get; }
@@ -106,6 +127,11 @@ public class ReplayFile
         writer.Write(Score.WhenPlayed);
         writer.Write(Data);
         writer.Write((long)Score.Id);
+        if (Score.UsesCustomRate)
+        {
+            writer.Write(CustomRateMarker);
+            writer.Write(Score.ClockRate);
+        }
 
         memoryStream.Seek(0, SeekOrigin.Begin);
 

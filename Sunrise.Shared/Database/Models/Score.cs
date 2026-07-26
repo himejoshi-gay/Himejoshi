@@ -61,6 +61,20 @@ public class Score
     public DateTime ClientTime { get; set; }
     public double Accuracy { get; set; }
     public double PerformancePoints { get; set; }
+    public double ClockRate { get; set; } = 1.0;
+
+    [NotMapped]
+    public double NominalClockRate => Mods.HasFlag(Mods.DoubleTime) || Mods.HasFlag(Mods.Nightcore)
+        ? 1.5
+        : Mods.HasFlag(Mods.HalfTime)
+            ? 0.75
+            : 1.0;
+
+    [NotMapped]
+    public bool UsesCustomRate => Math.Abs(ClockRate - NominalClockRate) > 0.001;
+
+    [NotMapped]
+    public bool HasClockRateMetadata { get; set; }
 
     [NotMapped]
     public LocalProperties LocalProperties { get; set; }

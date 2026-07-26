@@ -43,6 +43,9 @@ public class CalculateScoreRequest(Score score)
     [JsonPropertyName("mods")]
     public Mods Mods { get; set; } = score.Mods;
 
+    [JsonPropertyName("clockRate")]
+    public double ClockRate { get; set; } = score.ClockRate;
+
     [JsonPropertyName("isScoreFailed")]
     public bool IsScoreFailed { get; set; } = !score.IsPassed;
 }
