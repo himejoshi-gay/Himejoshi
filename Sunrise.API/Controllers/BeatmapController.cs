@@ -76,6 +76,8 @@ public class BeatmapController(DatabaseService database, BeatmapService beatmapS
         int? misses = null,
         [Range(0, 100)] [FromQuery(Name = "accuracy")]
         float? accuracy = null,
+        [Range(0.5, 2.0)] [FromQuery(Name = "clockRate")]
+        double? clockRate = null,
         CancellationToken ct = default)
     {
         var session = HttpContext.GetCurrentSession();
@@ -92,8 +94,10 @@ public class BeatmapController(DatabaseService database, BeatmapService beatmapS
             return Problem(ApiErrorResponse.Detail.BeatmapNotFound, statusCode: StatusCodes.Status404NotFound);
 
         var modsEnum = (mods ?? Array.Empty<Mods>()).Aggregate(Mods.None, (current, mod) => current | mod);
+        var hasSpeedMod = modsEnum.HasFlag(Mods.DoubleTime) || modsEnum.HasFlag(Mods.Nightcore) || modsEnum.HasFlag(Mods.HalfTime);
 
-        var performance = await calculatorService.CalculateBeatmapPerformance(session, id, gameMode ?? (GameMode)beatmap.ModeInt, modsEnum, combo, misses, accuracy);
+        var performance = await calculatorService.CalculateBeatmapPerformance(session, id, gameMode ?? (GameMode)beatmap.ModeInt, modsEnum, combo, misses, accuracy,
+            hasSpeedMod ? null : clockRate);
 
         if (performance.IsFailure)
             return Problem(performance.Error.Message, statusCode: StatusCodes.Status400BadRequest);

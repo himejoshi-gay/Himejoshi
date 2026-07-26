@@ -60,13 +60,13 @@ public class CalculatorService(Lazy<DatabaseService> database, HttpClientService
     }
 
     public async Task<Result<PerformanceAttributes, ErrorMessage>> CalculateBeatmapPerformance(BaseSession session, int beatmapId, GameMode mode,
-        Mods mods = Mods.None, int? combo = null, int? misses = null, float? accuracy = null)
+        Mods mods = Mods.None, int? combo = null, int? misses = null, float? accuracy = null, double? clockRate = null)
     {
         var requestMods = mods.IgnoreNotStandardModsForRecalculation();
 
         var performancesResult = await client.SendRequest<List<PerformanceAttributes>>(session,
             ApiType.CalculateBeatmapPerformance,
-            [beatmapId, accuracy ?? 100, (int)mode, (int)requestMods, combo, misses]);
+            [beatmapId, accuracy ?? 100, (int)mode, (int)requestMods, combo, misses, clockRate]);
 
         if (performancesResult.IsFailure) return performancesResult.ConvertFailure<PerformanceAttributes>();
 
