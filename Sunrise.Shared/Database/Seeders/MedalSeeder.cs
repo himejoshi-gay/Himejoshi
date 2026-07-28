@@ -287,6 +287,10 @@ public static class MedalSeeder
             {    
                 new Medal { Id = 109, Name = "Memories Unlocked", Description = "Years of clicking, one final breakthrough. Every song, every note, every memory - finally conquered.", Category = MedalCategory.BeatmapHunt, Condition = FormatPlayBeatmapSetIdCondition(532522) },
                 "Files/Medals/all-secret-osumemories.png"
+            },
+            {    
+                new Medal { Id = 110, Name = "Besmegeniai protą turi tai tikrai", Description = "Kas sakė, kad būtinai reikia smegenų, kad žaistum kaip tikras besmegenis?", Category = MedalCategory.BeatmapHunt, Condition = FormatPlayBeatmapSetIdCondition(543108) },
+                "Files/Medals/all-secret-besmegeniai.png"
             }
      };
     // @formatter:on
