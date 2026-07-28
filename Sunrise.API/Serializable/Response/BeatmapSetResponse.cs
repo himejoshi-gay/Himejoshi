@@ -20,11 +20,11 @@ public class BeatmapSetResponse
         SubmittedDate = beatmapSet.SubmittedDate;
         RankedDate = beatmapSet.RankedDate;
         HasVideo = beatmapSet.HasVideo;
-        Beatmaps = beatmapSet.Beatmaps.Select(beatmap => new BeatmapResponse(sessions, beatmap, beatmapSet)).ToList();
+        Beatmaps = beatmapSet.Beatmaps?.Select(beatmap => new BeatmapResponse(sessions, beatmap, beatmapSet)).ToList() ?? [];
         Description = beatmapSet.Description?.description ?? "";
         Genre = beatmapSet.Genre?.Name ?? "Unknown";
         Language = beatmapSet.Language?.Name ?? "Unknown";
-        Tags = beatmapSet.Tags.Split(' ');
+        Tags = beatmapSet.Tags?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>();
         BeatmapNominatorUser = beatmapSet.BeatmapNominatorUser != null ? new UserResponse(sessions, beatmapSet.BeatmapNominatorUser) : null;
         CanBeHyped = beatmapSet.CanBeHyped;
     }
