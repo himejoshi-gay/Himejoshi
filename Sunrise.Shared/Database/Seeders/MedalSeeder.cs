@@ -289,7 +289,7 @@ public static class MedalSeeder
                 "Files/Medals/all-secret-osumemories.png"
             },
             {    
-                new Medal { Id = 110, Name = "Besmegeniai protą turi tai tikrai", Description = "Kas sakė, kad būtinai reikia smegenų, kad žaistum kaip tikras besmegenis?", Category = MedalCategory.BeatmapHunt, Condition = FormatPlayBeatmapSetIdCondition(543108) },
+                new Medal { Id = 110, Name = "Besmegeniai protą turi tai tikrai!", Description = "Kas sakė, kad būtinai reikia smegenų, kad žaistum kaip tikras besmegenis?", Category = MedalCategory.BeatmapHunt, Condition = FormatPlayBeatmapSetIdCondition(543108) },
                 "Files/Medals/all-secret-besmegeniai.png"
             }
      };
