@@ -45,15 +45,31 @@ public static class MedalSeeder
 
             if (existingMedal != null)
             {
-                if (existingMedal.File != null)
+                var medalFilePath = CustomMedals.FirstOrDefault(p => p.Key.Id == existingMedal.Id).Value;
+                if (medalFilePath != null)
                 {
-                    var medalFilePath = CustomMedals.FirstOrDefault(p => p.Key.Id == existingMedal.Id).Value;
-                    if (medalFilePath != null)
-                        existingMedal.File.Path = medalFilePath;
-                }
+                    var medalImageEntry = await context.Set<MedalFile>().FirstOrDefaultAsync(mf => mf.Path == medalFilePath, cancellationToken: ct);
 
-                medal.FileId = existingMedal.FileId;
-                medal.File = existingMedal.File;
+                    if (medalImageEntry == null)
+                    {
+                        medalImageEntry = new MedalFile
+                        {
+                            Path = medalFilePath
+                        };
+                        await context.Set<MedalFile>().AddAsync(medalImageEntry, ct);
+                        await context.SaveChangesAsync(ct);
+                    }
+
+                    existingMedal.FileId = medalImageEntry.Id;
+                    existingMedal.File = medalImageEntry;
+                    medal.FileId = medalImageEntry.Id;
+                    medal.File = medalImageEntry;
+                }
+                else
+                {
+                    medal.FileId = existingMedal.FileId;
+                    medal.File = existingMedal.File;
+                }
 
                 context.Entry(existingMedal).CurrentValues.SetValues(medal);
             }
