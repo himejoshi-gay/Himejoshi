@@ -307,6 +307,10 @@ public static class MedalSeeder
             {    
                 new Medal { Id = 110, Name = "Besmegeniai protą turi tai tikrai!", Description = "Kas sakė, kad būtinai reikia smegenų, kad žaistum kaip tikras besmegenis?", Category = MedalCategory.BeatmapHunt, Condition = FormatPlayBeatmapSetIdCondition(543108) },
                 "Files/Medals/all-secret-besmegeniai.png"
+            },
+            {    
+                new Medal { Id = 111, Name = "Carved in the Present", Description = "Relying solely on your own rhythm to leave something behind before returning to dust.", Category = MedalCategory.BeatmapHunt, Condition = $"{FormatPlayBeatmapSetIdCondition(1885198)} && {nameof(MedalConditionContext.score)}.{nameof(Score.Perfect)}" },
+                "Files/Medals/all-secret-carved-in-the-present.png"
             }
      };
     // @formatter:on
