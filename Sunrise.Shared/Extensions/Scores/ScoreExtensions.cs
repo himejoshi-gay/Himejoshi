@@ -116,13 +116,23 @@ public static class ScoreExtensions
         var split = scoreString.Split(':');
 
         var mods = (Mods)int.Parse(split[13]);
-        var clockRate = split.Length > 18
-            ? double.Parse(split[18], CultureInfo.InvariantCulture)
-            : mods.HasFlag(Mods.DoubleTime) || mods.HasFlag(Mods.Nightcore)
-                ? 1.5
-                : mods.HasFlag(Mods.HalfTime)
-                    ? 0.75
-                    : 1.0;
+        var hasValidCustomClockRate = split.Length > 18 &&
+                                      double.TryParse(split[18], CultureInfo.InvariantCulture, out var parsedVal) &&
+                                      parsedVal is >= 0.5 and <= 2.0;
+
+        var clockRate = 1.0;
+        if (hasValidCustomClockRate && double.TryParse(split[18], CultureInfo.InvariantCulture, out var validRate))
+        {
+            clockRate = validRate;
+        }
+        else if (mods.HasFlag(Mods.DoubleTime) || mods.HasFlag(Mods.Nightcore))
+        {
+            clockRate = 1.5;
+        }
+        else if (mods.HasFlag(Mods.HalfTime))
+        {
+            clockRate = 0.75;
+        }
 
         var score = new Score
         {
@@ -149,7 +159,7 @@ public static class ScoreExtensions
             BeatmapStatus = beatmap.Status,
             ClientTime = DateTime.ParseExact(split[16], "yyMMddHHmmss", null),
             ClockRate = clockRate,
-            HasClockRateMetadata = split.Length > 18
+            HasClockRateMetadata = hasValidCustomClockRate
         };
 
         score.LocalProperties = score.LocalProperties.FromScore(score);
