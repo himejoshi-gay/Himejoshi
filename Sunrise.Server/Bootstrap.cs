@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using System.Security.Authentication;
 using System.Transactions;
 using EFCoreSecondLevelCacheInterceptor;
@@ -10,6 +11,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.HttpLogging;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +33,7 @@ using Serilog.Sinks.Grafana.Loki;
 using StackExchange.Redis;
 using Sunrise.API.Controllers;
 using Sunrise.API.Serializable.Response;
+using Sunrise.API.Services;
 using Sunrise.Server.Middlewares;
 using Sunrise.Server.Repositories;
 using Sunrise.Server.Services;
@@ -62,7 +65,11 @@ public static class Bootstrap
         "h",
         "ha",
         "p",
-        "pass"
+        "pass",
+        "code",
+        "state",
+        "verification_token",
+        "discord_verification_token"
     ];
 
     public static void Configure(this WebApplicationBuilder builder)
@@ -116,7 +123,9 @@ public static class Bootstrap
         {
             builder.Services.AddW3CLogging(logging =>
             {
-                logging.LoggingFields = W3CLoggingFields.All;
+                // OAuth authorization codes and state arrive in the callback query.
+                // W3C logging has no per-parameter redaction, so never log query strings.
+                logging.LoggingFields = W3CLoggingFields.All & ~W3CLoggingFields.UriQuery;
                 logging.AdditionalRequestHeaders.Add("x-forwarded-for");
                 logging.AdditionalRequestHeaders.Add("osu-version");
                 if (Configuration.IncludeUserTokenInLogs) logging.AdditionalRequestHeaders.Add("osu-token");
@@ -300,6 +309,12 @@ public static class Bootstrap
                 .AllowAnyHeader()
                 .AllowAnyMethod()
             );
+
+            options.AddPolicy("Registration", policy => policy
+                .WithOrigins(new Uri(Configuration.DiscordOAuthRegistrationUrl).GetLeftPart(UriPartial.Authority))
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials());
         });
 
         builder.Services.AddRequestTimeouts(options =>
@@ -318,6 +333,37 @@ public static class Bootstrap
                     return Task.CompletedTask;
                 }
             };
+        });
+    }
+
+    public static void AddForwardedHeaderHandling(this WebApplicationBuilder builder)
+    {
+        builder.Services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = ForwardedHeaders.None;
+            options.ForwardLimit = 1;
+            options.KnownNetworks.Clear();
+            options.KnownProxies.Clear();
+
+            foreach (var cidr in Configuration.TrustedProxyNetworks)
+            {
+                var separator = cidr.LastIndexOf('/');
+                if (separator <= 0 ||
+                    !IPAddress.TryParse(cidr[..separator], out var prefix) ||
+                    !int.TryParse(cidr[(separator + 1)..], out var prefixLength))
+                {
+                    throw new InvalidOperationException($"Invalid TRUSTED_PROXY_NETWORKS CIDR: {cidr}");
+                }
+
+                var maximumPrefixLength = prefix.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128;
+                if (prefixLength < 0 || prefixLength > maximumPrefixLength)
+                    throw new InvalidOperationException($"Invalid TRUSTED_PROXY_NETWORKS prefix length: {cidr}");
+
+                options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(prefix, prefixLength));
+            }
+
+            if (options.KnownNetworks.Count > 0 || options.KnownProxies.Count > 0)
+                options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
         });
     }
 
@@ -441,6 +487,17 @@ public static class Bootstrap
 
     public static void AddServices(this WebApplicationBuilder builder)
     {
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddScoped<RegistrationIdentityHasher>();
+        builder.Services.AddScoped<RegistrationAbuseService>();
+        builder.Services.AddScoped<DiscordRegistrationStore>();
+        builder.Services.AddHttpClient<IDiscordOAuthClient, DiscordOAuthClient>(client =>
+        {
+            client.BaseAddress = new Uri("https://discord.com/api/v10/");
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Himejoshi");
+        });
+
         builder.Services.AddScoped<DirectService>();
         builder.Services.AddScoped<MedalService>();
         builder.Services.AddScoped<AssetBanchoService>();

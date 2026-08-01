@@ -72,20 +72,10 @@ public class RegionService(ILogger<RegionService> logger, RedisRepository redisR
 
     public static IPAddress GetUserIpAddress(HttpRequest request)
     {
-        var ipAddress = string.Empty;
+        var ip = request.HttpContext.Connection.RemoteIpAddress
+                 ?? throw new BadHttpRequestException("Unable to determine the source IP address.");
 
-        string? xForwardedFor = request.Headers["X-Forwarded-For"];
-
-        if (!string.IsNullOrEmpty(xForwardedFor))
-        {
-            var ipAddresses = xForwardedFor.Split([","], StringSplitOptions.RemoveEmptyEntries);
-
-            if (ipAddresses.Length > 0) ipAddress = ipAddresses[0].Trim();
-        }
-
-        if (string.IsNullOrEmpty(ipAddress)) ipAddress = request.HttpContext.Connection.RemoteIpAddress?.ToString();
-
-        return IPAddress.TryParse(ipAddress, out var ip) ? ip : IPAddress.Loopback;
+        return ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip;
     }
 
     public static int GetTimeOffsetFromTimezone(string timezone)
