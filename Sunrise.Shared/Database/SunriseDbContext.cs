@@ -27,6 +27,7 @@ public class SunriseDbContext : DbContext
     public DbSet<UserStatsSnapshot> UserStatsSnapshot { get; set; }
     public DbSet<UserFile> UserFiles { get; set; }
     public DbSet<UserInventoryItem> UserInventoryItem { get; set; }
+    public DbSet<UserRegistrationIdentity> UserRegistrationIdentities { get; set; }
 
 
     public DbSet<Medal> Medals { get; set; }
@@ -58,6 +59,26 @@ public class SunriseDbContext : DbContext
             .WithMany(u => u.UserInitiatedRelationships)
             .HasForeignKey(ur => ur.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserRegistrationIdentity>()
+            .HasOne(identity => identity.User)
+            .WithOne()
+            .HasForeignKey<UserRegistrationIdentity>(identity => identity.UserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        foreach (var property in new[]
+                 {
+                     nameof(UserRegistrationIdentity.DiscordSubjectHash),
+                     nameof(UserRegistrationIdentity.IpHash),
+                     nameof(UserRegistrationIdentity.InstallationIdHash),
+                     nameof(UserRegistrationIdentity.BrowserFingerprintHash)
+                 })
+        {
+            modelBuilder.Entity<UserRegistrationIdentity>()
+                .Property(property)
+                .HasMaxLength(64)
+                .IsFixedLength();
+        }
 
         modelBuilder.Entity<UserRelationship>()
             .HasOne(ur => ur.Target)

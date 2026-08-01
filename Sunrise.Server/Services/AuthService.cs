@@ -145,6 +145,23 @@ public class AuthService(DatabaseService database, SessionRepository sessions, U
 
         if (request.Form["check"] != "0") return new OkObjectResult("");
 
+        if (Configuration.DiscordOAuthEnabled)
+        {
+            return new BadRequestObjectResult(new
+            {
+                form_error = new
+                {
+                    user = new Dictionary<string, List<string>>
+                    {
+                        ["username"] =
+                        [
+                            $"Registration requires Discord verification. Please register at https://{Configuration.Domain}/register."
+                        ]
+                    }
+                }
+            });
+        }
+
         var (newUser, errors) = await userAuthService.RegisterUser(username, password, email, ip);
 
         var noErrorsFound = errors is { Count: 0 };

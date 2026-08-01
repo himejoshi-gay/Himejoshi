@@ -32,7 +32,6 @@ public class UserEventService(SunriseDbContext dbContext)
             {
                 userData.Username,
                 userData.Email,
-                userData.Passhash,
                 userData.Country,
                 userData.RegisterDate
             }

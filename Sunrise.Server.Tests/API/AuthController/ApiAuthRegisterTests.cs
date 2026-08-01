@@ -424,6 +424,6 @@ public class ApiAuthRegisterTests(IntegrationDatabaseFixture fixture) : ApiTest(
 
         var responseError = await response.Content.ReadFromJsonAsyncWithAppConfig<ProblemDetails>();
 
-        Assert.Contains("Please don't create multiple accounts", responseError?.Detail);
+        Assert.Contains("already been registered from this connection", responseError?.Detail);
     }
 }

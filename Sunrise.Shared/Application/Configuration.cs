@@ -72,6 +72,52 @@ public static class Configuration
     public static int ApiWindow =>
         Config.GetSection("API").GetSection("RateLimit").GetValue<int?>("Window") ?? 10;
 
+    // Registration verification section
+    public static bool DiscordOAuthEnabled =>
+        bool.TryParse(Environment.GetEnvironmentVariable("REQUIRE_DISCORD_REGISTRATION"), out var configured)
+            ? configured
+            : !IsDevelopment && !IsTestingEnv;
+
+    public static string DiscordOAuthClientId =>
+        Environment.GetEnvironmentVariable("DISCORD_OAUTH_CLIENT_ID") ?? string.Empty;
+
+    public static string DiscordOAuthClientSecret =>
+        Environment.GetEnvironmentVariable("DISCORD_OAUTH_CLIENT_SECRET") ?? string.Empty;
+
+    public static string DiscordOAuthCallbackUrl =>
+        GetNonEmptyEnvironmentValue("DISCORD_OAUTH_CALLBACK_URL") ?? $"https://api.{Domain}/auth/discord/callback";
+
+    public static string DiscordOAuthRegistrationUrl =>
+        GetNonEmptyEnvironmentValue("DISCORD_OAUTH_REGISTRATION_URL") ?? $"https://{Domain}/register";
+
+    public static int DiscordOAuthMinimumAccountAgeDays =>
+        int.TryParse(Environment.GetEnvironmentVariable("DISCORD_MIN_ACCOUNT_AGE_DAYS"), out var value) && value >= 0
+            ? value
+            : 7;
+
+    public static TimeSpan DiscordOAuthStateLifetime =>
+        TimeSpan.FromSeconds(GetPositiveEnvironmentInteger("DISCORD_OAUTH_STATE_TTL_SECONDS", 600));
+
+    public static TimeSpan DiscordOAuthGrantLifetime =>
+        TimeSpan.FromSeconds(GetPositiveEnvironmentInteger("DISCORD_OAUTH_GRANT_TTL_SECONDS", 600));
+
+    public static string RegistrationIdentitySecret =>
+        Environment.GetEnvironmentVariable("REGISTRATION_IDENTITY_SECRET") ?? string.Empty;
+
+    public static string[] RegistrationAllowedEmailDomains =>
+        (GetNonEmptyEnvironmentValue("REGISTRATION_ALLOWED_EMAIL_DOMAINS") ??
+         "gmail.com,googlemail.com,outlook.com,hotmail.com,live.com,msn.com,proton.me,protonmail.com,pm.me," +
+         "yahoo.com,ymail.com,icloud.com,me.com,mac.com,fastmail.com,tuta.com,tutanota.com,tutamail.com," +
+         "keemail.me,zoho.com,zohomail.com,aol.com,gmx.com,gmx.net,gmx.de,mail.com,hey.com")
+        .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+        .Select(domain => domain.ToLowerInvariant())
+        .Distinct(StringComparer.Ordinal)
+        .ToArray();
+
+    public static string[] TrustedProxyNetworks =>
+        (Environment.GetEnvironmentVariable("TRUSTED_PROXY_NETWORKS") ?? string.Empty)
+        .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
     public static string ApiDocumentationPath =>
         Config.GetSection("API").GetValue<string?>("DocumentationPath") ?? "/docs";
 
@@ -249,7 +295,26 @@ public static class Configuration
 
     public static void Initialize()
     {
+        ValidateRegistrationConfiguration();
         AddObservatoryUrls();
+    }
+
+    public static void ValidateRegistrationConfiguration()
+    {
+        if (!DiscordOAuthEnabled)
+            return;
+
+        if (string.IsNullOrWhiteSpace(DiscordOAuthClientId))
+            throw new InvalidOperationException("DISCORD_OAUTH_CLIENT_ID must be set when Discord OAuth registration is enabled.");
+
+        if (string.IsNullOrWhiteSpace(DiscordOAuthClientSecret))
+            throw new InvalidOperationException("DISCORD_OAUTH_CLIENT_SECRET must be set when Discord OAuth registration is enabled.");
+
+        if (Encoding.UTF8.GetByteCount(RegistrationIdentitySecret) < 32)
+            throw new InvalidOperationException("REGISTRATION_IDENTITY_SECRET must be at least 32 bytes when Discord OAuth registration is enabled.");
+
+        ValidateFixedOAuthUri(DiscordOAuthCallbackUrl, "DISCORD_OAUTH_CALLBACK_URL", allowFragment: false);
+        ValidateFixedOAuthUri(DiscordOAuthRegistrationUrl, "DISCORD_OAUTH_REGISTRATION_URL", allowFragment: false);
     }
 
     private static void AddObservatoryUrls()
@@ -282,6 +347,28 @@ public static class Configuration
         if (string.IsNullOrEmpty(apiToken)) throw new Exception("API token is empty. Please check your configuration.");
 
         return apiToken;
+    }
+
+    private static int GetPositiveEnvironmentInteger(string key, int fallback)
+    {
+        return int.TryParse(Environment.GetEnvironmentVariable(key), out var value) && value > 0 ? value : fallback;
+    }
+
+    private static string? GetNonEmptyEnvironmentValue(string key)
+    {
+        var value = Environment.GetEnvironmentVariable(key);
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static void ValidateFixedOAuthUri(string value, string key, bool allowFragment)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttps && !IsDevelopment && !IsTestingEnv) ||
+            !string.IsNullOrEmpty(uri.Query) ||
+            (!allowFragment && !string.IsNullOrEmpty(uri.Fragment)))
+        {
+            throw new InvalidOperationException($"{key} must be a fixed absolute URI without a query or fragment.");
+        }
     }
 
     private static string GetValuesFromEnvOrFallbackToDeprecatedConfigIfCantAccessEnv(string envKey, Func<string?> envBasedFunc, Func<string?> deprecatedConfigFunc)

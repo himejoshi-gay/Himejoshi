@@ -18,6 +18,7 @@ builder.AddDatabaseServices();
 builder.AddSingletons();
 
 builder.AddMiddlewares();
+builder.AddForwardedHeaderHandling();
 builder.AddApiEndpoints();
 builder.AddApiDocs();
 builder.AddProblemDetails();
@@ -33,6 +34,8 @@ builder.AddCustomLogging();
 builder.Configure();
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 app.UseHangfireDashboard("/hangfire",
     new DashboardOptions

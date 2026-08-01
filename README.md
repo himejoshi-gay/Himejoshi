@@ -81,7 +81,13 @@ If you are looking for the official documentation, please refer to [docs.himejos
      ```
 
 > [!WARNING]
-> Make sure to update `WEB_DOMAIN` and `API_TOKEN_SECRET` values!
+> Make sure to update `WEB_DOMAIN` and `API_TOKEN_SECRET`. For production registration, create a Discord OAuth2
+> application, register `https://api.<WEB_DOMAIN>/auth/discord/callback` as its redirect URI, and set
+> `DISCORD_OAUTH_CLIENT_ID`, `DISCORD_OAUTH_CLIENT_SECRET`, and an independent random
+> `REGISTRATION_IDENTITY_SECRET` of at least 32 bytes. If a reverse proxy is used, set `TRUSTED_PROXY_NETWORKS`
+> only to that proxy's network; forwarded client IP headers are ignored from every other source. Registration
+> accepts verified Discord emails only from the established providers in `REGISTRATION_ALLOWED_EMAIL_DOMAINS`;
+> add another legitimate provider there when needed.
 
 4. Set up the beatmap manager by following the instructions in
    the [Observatory](https://github.com/himejoshi-gay/Observatory). After setting up the beatmap manager,
