@@ -585,8 +585,20 @@ public static class Bootstrap
     public static void UseMiddlewares(this WebApplication app)
     {
         app.UseMiddleware<Middleware>();
-        app.UseCors();
         app.UseRequestTimeouts();
+    }
+
+    public static void UseRequestPipeline(this WebApplication app)
+    {
+        app.UseRouting();
+
+        app.UseCors();
+
+        app.UseAuthentication();
+
+        app.UseMiddlewares();
+
+        app.UseAuthorization();
     }
 
     public static void Configure(this WebApplication app)
@@ -622,13 +634,7 @@ public static class Bootstrap
             };
         });
 
-        app.UseRouting();
-
-        app.UseAuthentication();
-
-        app.UseMiddlewares();
-
-        app.UseAuthorization();
+        app.UseRequestPipeline();
 
         app.MapControllers();
     }
