@@ -1,12 +1,14 @@
 using System.Net;
 using Sunrise.API.Serializable.Response;
 using Sunrise.Shared.Database.Models.Beatmap;
+using Sunrise.Shared.Enums;
 using Sunrise.Shared.Enums.Beatmaps;
 using Sunrise.Shared.Extensions.Beatmaps;
 using Sunrise.Tests.Abstracts;
 using Sunrise.Tests.Extensions;
 using Sunrise.Tests.Services.Mock;
 using Sunrise.Tests.Utils;
+using SerializableBeatmapSet = Sunrise.Shared.Objects.Serializable.BeatmapSet;
 
 namespace Sunrise.Server.Tests.API.BeatmapController;
 
@@ -14,6 +16,49 @@ namespace Sunrise.Server.Tests.API.BeatmapController;
 public class ApiSearchBeatmapsetsTests(IntegrationDatabaseFixture fixture) : ApiTest(fixture)
 {
     private readonly MockService _mocker = new();
+
+    [Fact]
+    public async Task TestSearchBeatmapsetsWithMultipleStatusesAndMissingConverts()
+    {
+        // Observatory search responses can omit the converts collection.
+        var beatmapSet = _mocker.Beatmap.GetRandomBeatmapSet();
+        beatmapSet.StatusString = BeatmapStatusWeb.Ranked.BeatmapStatusWebToString();
+        beatmapSet.ConvertedBeatmaps = null!;
+        beatmapSet.Beatmaps[0].ModeInt = (int)GameMode.Standard;
+
+        object?[]? searchArguments = null;
+        var mockHttpClient = App.MockHttpClient ?? throw new InvalidOperationException("Mock HTTP client is unavailable.");
+        mockHttpClient.MockResponse<List<SerializableBeatmapSet>>(ApiType.BeatmapSetSearch, arguments =>
+        {
+            searchArguments = Assert.IsType<object?[]>(arguments);
+            return [beatmapSet];
+        });
+
+        try
+        {
+            var client = App.CreateClient().UseClient("api");
+
+            var response = await client.GetAsync(
+                "beatmapset/search?page=1&limit=5&mode=Standard&status=Ranked&status=Loved&status=Approved");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var result = await response.Content.ReadFromJsonAsyncWithAppConfig<BeatmapSetsResponse>();
+            Assert.NotNull(result);
+            Assert.Single(result.Sets);
+
+            Assert.NotNull(searchArguments);
+            Assert.Equal(string.Empty, searchArguments[0]);
+            Assert.Equal(5, searchArguments[1]);
+            Assert.Equal(0, searchArguments[2]);
+            Assert.Equal("1&status=4&status=2", searchArguments[3]);
+            Assert.Equal("0", searchArguments[4]);
+        }
+        finally
+        {
+            mockHttpClient.ClearMocks();
+        }
+    }
 
     [Fact]
     public async Task TestSearchBeatmapsetsWithCustomStatus()
